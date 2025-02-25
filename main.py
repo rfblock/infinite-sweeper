@@ -6,17 +6,25 @@ import random
 
 ray.set_config_flags(ray.ConfigFlags.FLAG_WINDOW_RESIZABLE)
 ray.init_window(800, 600, 'Infinite Sweeper')
-ray.set_target_fps(360)
+ray.set_target_fps(30)
 
 revealed_squares = set()
 flagged_squares = set()
+start_square : None | Vec2 = None
+
 camera_pos = Vec2(0, 0)
 seed = random.random()
+print(str(seed))
 
 square_size = 30
 
 def is_mine(coord: Vec2) -> bool:
 	# lmfao
+	if start_square is not None:
+		dist = coord - start_square
+		if abs(dist.x) <= 1 and abs(dist.y) <= 1:
+			return False
+
 	random.seed(str(coord) + str(seed))
 	return random.random() < 0.2
 
@@ -42,10 +50,24 @@ def is_empty(coords: Vec2) -> bool:
 def count_mines(coords: Vec2) -> int:
 	return sum(is_mine(n) for n in get_neighbors(coords))
 
+def chord_square(coords: Vec2) -> None:
+	neighbors = get_neighbors(coords)
+	flags = sum(c.tuple in flagged_squares for c in neighbors)
+	if count_mines(coords) == flags:
+		for c in neighbors:
+			reveal_square(c)
+
 def reveal_square(coords: Vec2) -> None:
+	global start_square
 	if coords.tuple in revealed_squares:
 		return
 	
+	if coords.tuple in flagged_squares:
+		return
+	
+	if start_square is None:
+		start_square = coords
+
 	revealed_squares.add(coords.tuple)
 	if is_empty(coords):
 		for n in get_neighbors(coords):
@@ -82,13 +104,16 @@ while not ray.window_should_close():
 		mouse_pos = ray.get_mouse_position()
 		mouse_pos = Vec2(int(mouse_pos.x), int(mouse_pos.y))
 		cell_pos = (mouse_pos + camera_pos) // square_size
-		reveal_square(cell_pos)
+		if cell_pos.tuple in revealed_squares:
+			chord_square(cell_pos)
+		else:
+			reveal_square(cell_pos)
 	
 	if ray.is_mouse_button_pressed(ray.MouseButton.MOUSE_BUTTON_RIGHT):
 		mouse_pos = ray.get_mouse_position()
 		mouse_pos = Vec2(int(mouse_pos.x), int(mouse_pos.y))
 		cell_pos = (mouse_pos + camera_pos) // square_size
-		if cell_pos in flagged_squares:
+		if cell_pos.tuple in flagged_squares:
 			flagged_squares.remove(cell_pos.tuple)
 		else:
 			flagged_squares.add(cell_pos.tuple)
@@ -103,7 +128,7 @@ while not ray.window_should_close():
 	if ray.is_key_down(KeyboardKey.KEY_DOWN):
 		vel.y += 1
 	
-	camera_pos += vel
+	camera_pos += vel * 5
 
 	# ray.draw_text()
 
